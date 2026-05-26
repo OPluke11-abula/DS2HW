@@ -348,8 +348,8 @@ public:
         continue;
       }
 
-      // 檢查自訂門檻是否符合範圍 [0.9, 1.0]
-      if (threshold < 0.9 || threshold > 1.0) {
+      // 檢查自訂門檻是否符合範圍 (0.9, 1.0]
+      if (threshold <= 0.9f || threshold > 1.0f) {
         cout << "\n### It is NOT in [0.9,1.0] ###\n";
         continue;
       }
