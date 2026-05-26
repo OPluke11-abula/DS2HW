@@ -8,6 +8,7 @@
 #include <queue>
 #include <string>
 #include <vector>
+#include <chrono>
 
 using namespace std;
 
@@ -271,6 +272,253 @@ public:
     // 在螢幕顯示成功計算的資訊
     cout << "\n<<< There are " << results.size() << " IDs in total. >>>\n";
   }
+
+private:
+  // 任務三：深度優先搜尋遞迴函式
+  void dfs(int u, float threshold, vector<bool> &visited, vector<string> &connectedIDs) const {
+    // 巡迴該節點的每一條邊
+    for (const auto &edge : graph[u].list) {
+      if (edge.weight >= threshold) { // 檢查權重是否達到門檻
+        int v = getIndex(edge.getID); // 取得相鄰點在主陣列的索引
+        if (v != -1 && !visited[v]) {
+          visited[v] = true;          // 標記為已走訪
+          connectedIDs.push_back(edge.getID); // 記錄收訊者學號
+          dfs(v, threshold, visited, connectedIDs); // 遞迴走訪相鄰點
+        }
+      }
+    }
+  }
+
+  // 驗證字串是否為合法浮點數格式
+  bool isValidFloat(const string &str, float &val) const {
+    if (str.empty()) return false;
+    int dotCount = 0;
+    for (char c : str) {
+      if (c == '.') {
+        dotCount++;
+        if (dotCount > 1) return false;
+      } else if (!isdigit(c)) {
+        return false;
+      }
+    }
+    try {
+      val = stof(str);
+      return true;
+    } catch (...) {
+      return false;
+    }
+  }
+
+  // 驗證字串是否為合法整數格式
+  bool isValidInteger(const string &str, int &val) const {
+    if (str.empty()) return false;
+    for (char c : str) {
+      if (!isdigit(c)) return false;
+    }
+    try {
+      val = stoi(str);
+      return true;
+    } catch (...) {
+      return false;
+    }
+  }
+
+public:
+  // 任務三：以深度優先走訪計算影響力
+  void computeInfluence(const string &fileNum) {
+    if (graph.empty())
+      return; // 防呆：無圖形時不執行
+
+    float threshold = 0.0f; // 自訂門檻之變數
+    while (true) {
+      cout << "\nInput a real number in [0.9,1.0]: ";
+      string input;
+      if (!getline(cin, input)) {
+        return; // 若讀到 EOF，退回主選單
+      }
+      if (!input.empty() && input.back() == '\r') {
+        input.pop_back(); // 處理換行字元
+      }
+      if (input.empty()) {
+        continue; // 若為空輸入則重新提示
+      }
+
+      // 驗證是否為合法浮點數格式
+      if (!isValidFloat(input, threshold)) {
+        continue;
+      }
+
+      // 檢查自訂門檻是否符合範圍 [0.9, 1.0]
+      if (threshold < 0.9 || threshold > 1.0) {
+        cout << "\n### It is NOT in [0.9,1.0] ###\n";
+        continue;
+      }
+      break; // 通過驗證，跳出輸入迴圈
+    }
+
+    vector<CntNode> results; // 宣告儲存結果的陣列
+    results.reserve(graph.size());
+
+    // 對圖中的每個學號（發訊者）進行 DFS 走訪以計算其影響力
+    for (size_t i = 0; i < graph.size(); ++i) {
+      vector<bool> visited(graph.size(), false); // 走訪標記，初始皆為未走訪
+      vector<string> connectedIDs;              // 紀錄走訪過的所有收訊者學號
+
+      visited[i] = true; // 標記起點本身為已走訪 (起點本身不計入收訊者)
+
+      // 開始深度優先走訪 (DFS)
+      dfs(i, threshold, visited, connectedIDs);
+
+      // 若影響力大於 0 (走訪到至少一個相異收訊者)
+      if (!connectedIDs.empty()) {
+        // 將走訪過的所有收訊者學號依字串由小到大排序
+        sort(connectedIDs.begin(), connectedIDs.end());
+        
+        CntNode node;
+        node.putID = graph[i].putID;
+        node.count = (int)connectedIDs.size();
+        node.connectedIDs = move(connectedIDs);
+        results.push_back(move(node));
+      }
+    }
+
+    // 依照影響力由大到小排序，若相同則依學號由小到大排序
+    sort(results.begin(), results.end());
+
+    // 輸出至 .inf 檔案
+    string outName = "pairs" + fileNum + ".inf";
+    ofstream outFile(outName);
+
+    // 依格式寫入總 ID 數
+    outFile << "<<< There are " << results.size() << " IDs in total. >>>\n";
+    for (size_t i = 0; i < results.size(); ++i) {
+      // 寫入學號與對應的影響力
+      outFile << "[" << setw(3) << right << (i + 1) << "] " << results[i].putID
+              << "(" << results[i].count << "): \n";
+
+      // 依序寫入走訪到的收訊者學號
+      for (size_t j = 0; j < results[i].connectedIDs.size(); ++j) {
+        // 每列開頭的縮排
+        if (j % 12 == 0)
+          outFile << "\t";
+        // 序號寬度為 2 並靠右，學號直接印出
+        outFile << "(" << setw(2) << right << (j + 1) << ") "
+                << results[i].connectedIDs[j];
+
+        if (j % 12 == 11) {
+          outFile << "\n";
+        } else if (j != results[i].connectedIDs.size() - 1) {
+          outFile << "\t"; // 元素間的間隔
+        }
+      }
+      if (!results[i].connectedIDs.empty()) {
+        outFile << "\n";
+      }
+    }
+    outFile.close(); // 關閉輸出檔案
+
+    // 在螢幕顯示成功計算的資訊
+    cout << "\n<<< There are " << results.size() << " IDs in total. >>>\n";
+  }
+
+  // 任務四：以固定門檻找出前 K 名估計影響力
+  void findTopKInfluence() {
+    if (graph.empty())
+      return; // 防呆：無圖形時不執行
+
+    // 開始量測執行時間
+    auto start = chrono::high_resolution_clock::now();
+
+    // 儲存估計影響力結果的陣列
+    vector<CntNode> results;
+    results.reserve(graph.size());
+
+    // 計算每個節點的估計影響力 (固定門檻 0.9f)
+    for (size_t i = 0; i < graph.size(); ++i) {
+      vector<bool> visited(graph.size(), false); // 走訪標記
+      queue<int> q;                              // BFS 佇列
+      int count = 0;                             // 影響力計數器
+
+      q.push(i);         // 起點加入佇列
+      visited[i] = true; // 標記起點為已走訪
+
+      // BFS 走訪尋找有效路徑
+      while (!q.empty()) {
+        int u = q.front();
+        q.pop();
+
+        // 巡迴該節點的每一條邊
+        for (const auto &edge : graph[u].list) {
+          if (edge.weight >= 0.9f) { // 固定門檻為 0.9f
+            int v = getIndex(edge.getID); // 取得相鄰點在主陣列的索引
+            if (v != -1 && !visited[v]) {
+              visited[v] = true; // 標記為已走訪
+              count++;           // 影響力遞增
+              q.push(v);         // 相鄰點加入佇列
+            }
+          }
+        }
+      }
+
+      // 僅記錄影響力大於 0 的節點
+      if (count > 0) {
+        CntNode node;
+        node.putID = graph[i].putID;
+        node.count = count;
+        results.push_back(move(node));
+      }
+    }
+
+    // 排序：估計影響力由大到小，學號由小到大
+    sort(results.begin(), results.end());
+
+    // 結束時間量測
+    auto end = chrono::high_resolution_clock::now();
+    auto elapsed = chrono::duration_cast<chrono::milliseconds>(end - start).count();
+
+    // 輸出執行時間
+    cout << "\n[Elapsed time] " << elapsed << " ms\n";
+
+    // 提示輸入 K 值並進行驗證
+    int numPositive = (int)results.size(); // 影響力大於 0 的總 ID 數
+    int k = 0;
+    while (true) {
+      cout << "\nInput an integer to show top-K in [1," << numPositive << "]: ";
+      string input;
+      if (!getline(cin, input)) {
+        return; // 若讀到 EOF，退回主選單
+      }
+      if (!input.empty() && input.back() == '\r') {
+        input.pop_back(); // 處理換行字元
+      }
+      if (input.empty()) {
+        continue;
+      }
+
+      // 驗證是否為合法整數格式
+      if (!isValidInteger(input, k)) {
+        continue;
+      }
+
+      // 檢查 K 值是否在有效範圍內
+      if (k < 1 || k > numPositive) {
+        cout << "\n### " << k << " is NOT in [1," << numPositive << "] ###\n";
+        continue;
+      }
+      break; // 通過驗證，跳出輸入迴圈
+    }
+
+    // 輸出前 K 名估計影響力
+    cout << "\n";
+    for (int i = 0; i < (int)results.size(); ++i) {
+      // 輸出前 K 名 (包含同分者)
+      if (i < k || results[i].count == results[k - 1].count) {
+        cout << "<" << (i + 1) << "> " << results[i].putID << ": " << results[i].count << "\n";
+      } else {
+        break; // 超過範圍且無同分，結束輸出
+      }
+    }
+  }
 };
 
 int main() {
@@ -284,8 +532,10 @@ int main() {
          << "* 0. QUIT                        *\n"
          << "* 1. Build adjacency lists       *\n"
          << "* 2. Compute connection counts   *\n"
+         << "* 3. Estimate influence values   *\n"
+         << "* 4. Find top-k influence values *\n"
          << "**********************************\n"
-         << "Input a choice(0, 1, 2): ";
+         << "Input a choice(0, 1, 2, 3, 4): ";
 
     string command;
     if (!getline(cin, command)) {
@@ -338,8 +588,24 @@ int main() {
         manager.computeConnectionCounts(currentFileNum);
       }
 
+    } else if (command == "3") {
+      // 任務三：執行以深度優先走訪計算影響力
+      if (!manager.hasGraph()) {
+        cout << "### There is no graph and choose 1 first. ###\n";
+      } else {
+        manager.computeInfluence(currentFileNum);
+      }
+
+    } else if (command == "4") {
+      // 任務四：以固定門檻找出前 K 名估計影響力
+      if (!manager.hasGraph()) {
+        cout << "### There is no graph and choose 1 first. ###\n";
+      } else {
+        manager.findTopKInfluence();
+      }
+
     } else {
-      // 如果輸入不為 "0", "1", "2"，顯示找不到指令
+      // 如果輸入不為 "0", "1", "2", "3", "4"，顯示找不到指令
       cout << "\nCommand does not exist!\n";
     }
     cout
